@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>SSV Nexus · 轻量归档 v2（入口藏进编辑 modal）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #F5F6F8;
+    min-height: 100vh;
+    padding: 32px 20px 80px;
+    color: #1F2328;
+  }
+
+  .hint-bar {
+    max-width: 920px;
+    margin: 0 auto 16px;
+    background: #1F2328;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .hint-bar b { color: #FBBF24; }
+
+  .page {
+    max-width: 920px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 10px;
+    padding: 24px 28px 40px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  }
+
+  /* Event 容器 */
+  .event {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .event.focused { border-color: #3B82F6; }
+
+  .event-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 18px 10px;
+    gap: 10px;
+  }
+  .caret { color: #6B7280; font-size: 10px; cursor: pointer; user-select: none; }
+  .event-num {
+    background: #EEF2FF; color: #4F46E5;
+    font-size: 12px; padding: 2px 8px;
+    border-radius: 4px; font-weight: 500;
+  }
+  .event-title { font-size: 15px; font-weight: 600; flex: 1; }
+  .event-time { font-size: 12.5px; color: #9CA3AF; }
+
+  .archived-tag {
+    font-size: 12px; color: #9CA3AF;
+    margin-right: 10px; display: none;
+  }
+  .event.archived .archived-tag { display: inline; }
+
+  .event-toolbar {
+    padding: 0 18px 14px;
+    display: flex;
+    gap: 10px;
+  }
+  .toolbar-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid #E4E7EB;
+    background: #F9FAFB;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .toolbar-btn:hover { background: #F3F4F6; }
+  .toolbar-btn.edit { color: #2563EB; border-color: #BFDBFE; background: #EFF6FF; }
+  .toolbar-btn.edit:hover { background: #DBEAFE; }
+  .toolbar-btn.delete { color: #DC2626; border-color: #FECACA; background: #FEF2F2; }
+  .toolbar-btn.delete:hover { background: #FEE2E2; }
+
+  .event.archived .toolbar-btn.edit,
+  .event.archived .toolbar-btn.delete {
+    /* 归档后仍可打开编辑（因为要取消归档），但内部字段会锁 */
+  }
+
+  .event-body { padding: 0 18px 16px; }
+  .section-label {
+    font-size: 13.5px; color: #374151; font-weight: 500;
+    margin: 10px 0 6px; display: flex; align-items: center; gap: 4px;
+  }
+  .body-text { font-size: 14px; color: #374151; margin-bottom: 10px; }
+  .todo-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 4px 0; font-size: 13.5px; color: #4B5563;
+  }
+  .todo-item input { margin-top: 3px; }
+  .attachment-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; background: #F3F4F6; border-radius: 14px;
+    font-size: 12.5px; color: #4B5563; cursor: pointer;
+  }
+
+  .comments-section {
+    padding: 12px 18px 0;
+    border-top: 1px solid #F0F1F3;
+    margin-top: 6px;
+  }
+  .comments-header {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 14px; font-weight: 500; color: #1F2328;
+    margin-bottom: 10px;
+  }
+  .comments-header .count { color: #9CA3AF; font-size: 13px; font-weight: 400; }
+
+  .comment-input {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .comment-input textarea {
+    width: 100%;
+    border: 1px solid #E4E7EB;
+    border-radius: 8px;
+    padding: 10px 90px 10px 14px;
+    font-size: 13.5px;
+    font-family: inherit;
+    outline: none;
+    resize: vertical;
+    min-height: 64px;
+    line-height: 1.5;
+  }
+  .comment-input textarea:focus { border-color: #3B82F6; }
+  .comment-input .send-btn {
+    position: absolute; right: 10px; bottom: 10px;
+    padding: 6px 16px; background: #B4C4F5; color: #fff;
+    border: none; border-radius: 6px; font-size: 13px; cursor: pointer;
+  }
+
+  .archived-hint {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: #F9FAFB;
+    border: 1px dashed #E4E7EB;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #6B7280;
+    margin-bottom: 12px;
+  }
+  .event.archived .archived-hint { display: flex; }
+  .event.archived .comment-input { display: none; }
+
+  .empty-comments {
+    text-align: center;
+    font-size: 13px;
+    color: #9CA3AF;
+    padding: 14px 0 8px;
+  }
+
+  /* ===== Modal ===== */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .overlay.show { display: flex; }
+
+  .modal {
+    width: 640px;
+    max-height: 86vh;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 48px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header {
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #F0F1F3;
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .close-btn {
+    width: 28px; height: 28px;
+    border: none; background: transparent;
+    cursor: pointer; color: #6B7280;
+    font-size: 16px; border-radius: 6px;
+  }
+  .close-btn:hover { background: #F3F4F6; }
+
+  .modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .field { margin-bottom: 18px; }
+  .field-label {
+    display: block;
+    font-size: 13px;
+    color: #1F2328;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .field-label .required { color: #EF4444; margin-left: 2px; }
+  .field-input, .field-textarea, .field-select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #E4E7EB;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    background: #fff;
+  }
+  .field-input:focus, .field-textarea:focus, .field-select:focus {
+    border-color: #3B82F6;
+  }
+  .field-textarea { min-height: 96px; resize: vertical; line-height: 1.55; }
+  .field-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  .field-select.placeholder { color: #9CA3AF; }
+
+  .attachment-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #E4E7EB;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #4B5563;
+    margin-bottom: 10px;
+  }
+  .attachment-remove {
+    width: 20px; height: 20px;
+    border: none; background: transparent;
+    cursor: pointer; color: #9CA3AF;
+    font-size: 14px;
+  }
+  .upload-zone {
+    border: 1px dashed #D1D5DB;
+    border-radius: 8px;
+    padding: 28px 12px;
+    text-align: center;
+    color: #9CA3AF;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .upload-zone:hover { border-color: #9CA3AF; color: #6B7280; }
+  .upload-zone .icon { font-size: 20px; display: block; margin-bottom: 6px; }
+  .upload-zone .sub { font-size: 11.5px; color: #C4C7CC; margin-top: 4px; }
+
+  /* 归档态：modal 内所有字段锁定 */
+  .modal.archived-mode .field-input,
+  .modal.archived-mode .field-textarea,
+  .modal.archived-mode .field-select,
+  .modal.archived-mode .upload-zone,
+  .modal.archived-mode .attachment-remove {
+    background: #F9FAFB;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .modal.archived-mode .field-label { color: #9CA3AF; }
+  .modal-archived-banner {
+    display: none;
+    padding: 10px 14px;
+    background: #FEF3C7;
+    border-left: 3px solid #F59E0B;
+    font-size: 12.5px;
+    color: #78350F;
+    margin: 0 24px 16px;
+    border-radius: 4px;
+    margin-top: 16px;
+  }
+  .modal.archived-mode .modal-archived-banner { display: block; }
+
+  .modal-footer {
+    padding: 14px 24px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #F0F1F3;
+    background: #FAFBFC;
+  }
+
+  /* 归档入口：左下角灰色文字链接 —— 关键 */
+  .archive-link-modal {
+    font-size: 12.5px;
+    color: #9CA3AF;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 2px;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+  .archive-link-modal:hover { color: #DC2626; }
+  .modal.archived-mode .archive-link-modal {
+    color: #2563EB;
+  }
+  .modal.archived-mode .archive-link-modal:hover { color: #1D4ED8; }
+
+  .footer-right { display: flex; gap: 8px; }
+  .btn {
+    padding: 7px 18px;
+    border-radius: 7px;
+    font-size: 13.5px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-family: inherit;
+  }
+  .btn-ghost { background: transparent; color: #4B5563; border-color: #E4E7EB; }
+  .btn-ghost:hover { background: #F3F4F6; }
+  .btn-primary { background: #2563EB; color: #fff; }
+  .btn-primary:hover { background: #1D4ED8; }
+  .btn-primary:disabled {
+    background: #D1D5DB; cursor: not-allowed;
+  }
+  .btn-danger { background: #DC2626; color: #fff; }
+  .btn-danger:hover { background: #B91C1C; }
+
+  /* 确认弹层 */
+  .confirm-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .confirm-overlay.show { display: flex; }
+  .confirm-box {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    width: 400px;
+    box-shadow: 0 20px 48px rgba(0,0,0,0.2);
+  }
+  .confirm-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .confirm-body { font-size: 13.5px; color: #4B5563; line-height: 1.6; margin-bottom: 18px; }
+  .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  .toast {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1F2328;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .annotations {
+    max-width: 920px;
+    margin: 16px auto 0;
+    padding: 16px 20px;
+    background: #FFFBEB;
+    border-left: 3px solid #F59E0B;
+    border-radius: 6px;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: #78350F;
+  }
+  .annotations h4 { font-size: 13px; margin-bottom: 6px; color: #92400E; }
+  .annotations ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<div class="hint-bar">
+  <b>试试看</b>：点 Event #3 的「✏️ 编辑」→ 看 modal 左下角的灰色小字「归档此事件」→ 点它确认归档 → 关闭 modal 看 Event 视觉 + 评论区的变化。归档后再次打开编辑 modal，所有字段灰掉，原位置的链接切换成「取消归档」。
+</div>
+
+<div class="page">
+
+  <div class="event">
+    <div class="event-header">
+      <span class="caret">▶</span>
+      <span class="event-num">#2</span>
+      <span class="event-title">空白主页</span>
+      <span class="event-time">2026-04-20 14:04</span>
+    </div>
+  </div>
+
+  <div class="event focused" id="event-3">
+    <div class="event-header">
+      <span class="caret">▼</span>
+      <span class="event-num">#3</span>
+      <span class="event-title">33</span>
+      <span class="archived-tag">· 已归档</span>
+      <span class="event-time">2026-04-20 13:19</span>
+    </div>
+
+    <div class="event-toolbar">
+      <button class="toolbar-btn edit" onclick="openModal()">✏️ 编辑</button>
+      <button class="toolbar-btn delete">🗑 删除</button>
+    </div>
+
+    <div class="event-body">
+      <div class="section-label">📝 正文</div>
+      <div class="body-text">2rda</div>
+
+      <div class="section-label">✅ 待办事项</div>
+      <div class="todo-item">
+        <input type="checkbox"><span>@产品负责人 推进下一版主页合流的设计与排期，优先解决壹基金等双料客户的数据展示体验</span>
+      </div>
+      <div class="todo-item">
+        <input type="checkbox"><span>@BD/客服团队 针对"多捐赠方活动剔除单体金额"的特殊数据口径，提前对齐并准备好客户答疑话术，谨防客诉</span>
+      </div>
+
+      <div class="section-label">📎 附件</div>
+      <div class="attachment-chip">📎 关爱主页产品介绍.pptx</div>
+    </div>
+
+    <div class="comments-section">
+      <div class="comments-header">💬 评论 <span class="count">0</span></div>
+
+      <div class="comment-input">
+        <textarea placeholder="发表评论，输入 @ 可提及他人..."></textarea>
+        <button class="send-btn">发送</button>
+      </div>
+
+      <div class="archived-hint">
+        <span>🔒</span><span>此事件已归档，不再接受新评论。已有评论仍可查看。</span>
+      </div>
+
+      <div class="empty-comments">暂无评论，来发表第一条吧</div>
+    </div>
+  </div>
+
+  <div class="event">
+    <div class="event-header">
+      <span class="caret">▼</span>
+      <span class="event-num">#4</span>
+      <span class="event-title">关爱主页 · 数据产品说明</span>
+      <span class="event-time">2026-04-20 12:47</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="annotations">
+  <h4>归档入口的位置调整</h4>
+  <ul>
+    <li><b>入口收进编辑 modal</b>：Event 外部不再露出归档按钮——想归档必须先点「编辑」进入 modal</li>
+    <li><b>Modal 内位置</b>：左下角，灰色小字文字链接，和右下角「保存/取消」形成对角线</li>
+    <li><b>为什么更合理</b>：归档本质是"编辑的一种"（这件事定版了），入口和编辑同路径、但藏得更深，符合"维护人才能做、不高频"</li>
+    <li><b>归档后回到 modal</b>：所有字段灰掉锁定，顶部一条黄色提示条；原归档链接变「取消归档」（蓝色）</li>
+    <li><b>Event 外部唯一变化</b>：时间戳前加 <code>· 已归档</code>，评论输入框替换为提示</li>
+  </ul>
+</div>
+
+<!-- 编辑 Modal -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title">✏️ 编辑事件</div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="modal-archived-banner">
+      🔒 此事件已归档。内容已锁定，如需继续修改请先取消归档。
+    </div>
+
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-label">子标题<span class="required">*</span></label>
+        <input type="text" class="field-input" value="33" />
+      </div>
+
+      <div class="field">
+        <label class="field-label">正文</label>
+        <textarea class="field-textarea">2rda</textarea>
+      </div>
+
+      <div class="field">
+        <label class="field-label">可见部门</label>
+        <select class="field-select placeholder">
+          <option>不选则继承 Topic 可见范围</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field-label">📎 附件</label>
+        <div class="attachment-row">
+          <span>📎 关爱主页产品介绍.pptx</span>
+          <button class="attachment-remove">✕</button>
+        </div>
+        <div class="upload-zone">
+          <span class="icon">📎</span>
+          点击上传文件
+          <div class="sub">支持 Word、PDF、Excel、腾讯会议纪要</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="archive-link-modal" id="archiveLink" onclick="askArchive()">归档此事件</button>
+      <div class="footer-right">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" id="saveBtn">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 二次确认 -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirmTitle">归档此事件？</div>
+    <div class="confirm-body" id="confirmBody">
+      归档后此 Event 不可再编辑、不可新增评论，但所有内容仍可正常查看。
+    </div>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" onclick="closeConfirm()">取消</button>
+      <button class="btn btn-danger" id="confirmBtn" onclick="doArchive()">归档</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">已归档</div>
+
+<script>
+  let archived = false;
+  const ev = document.getElementById('event-3');
+  const modal = document.getElementById('modal');
+  const overlay = document.getElementById('overlay');
+  const archiveLink = document.getElementById('archiveLink');
+  const saveBtn = document.getElementById('saveBtn');
+
+  function openModal() {
+    overlay.classList.add('show');
+    if (archived) modal.classList.add('archived-mode');
+    else modal.classList.remove('archived-mode');
+    updateModalArchiveState();
+  }
+  function closeModal() { overlay.classList.remove('show'); }
+
+  function askArchive() {
+    const title = document.getElementById('confirmTitle');
+    const body = document.getElementById('confirmBody');
+    const btn = document.getElementById('confirmBtn');
+    if (!archived) {
+      title.textContent = '归档此事件？';
+      body.textContent = '归档后此 Event 不可再编辑、不可新增评论，但所有内容仍可正常查看。';
+      btn.textContent = '归档';
+      btn.className = 'btn btn-danger';
+    } else {
+      title.textContent = '取消归档？';
+      body.textContent = '此 Event 将恢复为可编辑、可评论的正常状态。';
+      btn.textContent = '取消归档';
+      btn.className = 'btn btn-primary';
+    }
+    document.getElementById('confirmOverlay').classList.add('show');
+  }
+  function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('show'); }
+
+  function doArchive() {
+    archived = !archived;
+    if (archived) {
+      ev.classList.add('archived');
+      modal.classList.add('archived-mode');
+      showToast('已归档');
+    } else {
+      ev.classList.remove('archived');
+      modal.classList.remove('archived-mode');
+      showToast('已恢复');
+    }
+    updateModalArchiveState();
+    closeConfirm();
+  }
+
+  function updateModalArchiveState() {
+    if (archived) {
+      archiveLink.textContent = '取消归档';
+      saveBtn.disabled = true;
+    } else {
+      archiveLink.textContent = '归档此事件';
+      saveBtn.disabled = false;
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1600);
+  }
+</script>
+
+</body>
+</html>
