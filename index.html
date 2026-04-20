@@ -334,8 +334,19 @@
     background: #FAFBFC;
   }
 
-  /* 归档入口：左下角灰色文字链接 —— 关键 */
-  .archive-link-modal {
+  /* 左下角处置动作区：归档 · 删除，灰字文本链接 */
+  .modal-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .modal-action-sep {
+    color: #D1D5DB;
+    font-size: 12px;
+    user-select: none;
+  }
+  .archive-link-modal,
+  .delete-link-modal {
     font-size: 12.5px;
     color: #9CA3AF;
     background: transparent;
@@ -345,11 +356,19 @@
     font-family: inherit;
     transition: color 0.15s;
   }
-  .archive-link-modal:hover { color: #DC2626; }
+  /* 归档 hover：稳重的深灰/蓝 */
+  .archive-link-modal:hover { color: #374151; }
+  /* 删除 hover：红色警示 */
+  .delete-link-modal:hover { color: #DC2626; }
+  /* 归档态下：归档链接变"取消归档"（蓝色），删除链接隐藏 */
   .modal.archived-mode .archive-link-modal {
     color: #2563EB;
   }
   .modal.archived-mode .archive-link-modal:hover { color: #1D4ED8; }
+  .modal.archived-mode .delete-link-modal,
+  .modal.archived-mode .modal-action-sep {
+    display: none;
+  }
 
   .footer-right { display: flex; gap: 8px; }
   .btn {
@@ -426,7 +445,7 @@
 <body>
 
 <div class="hint-bar">
-  <b>试试看</b>：点 Event #3 的「✏️ 编辑」→ 看 modal 左下角的灰色小字「归档此事件」→ 点它确认归档 → 关闭 modal 看 Event 视觉 + 评论区的变化。归档后再次打开编辑 modal，所有字段灰掉，原位置的链接切换成「取消归档」。
+  <b>试试看</b>：点 Event #3 的「✏️ 编辑」→ modal 左下角有两个灰字链接「<b>归档此事件 · 删除</b>」。归档后再打开 modal，删除会消失、只剩「取消归档」——归档即冻结，要删必须先解冻。
 </div>
 
 <div class="page">
@@ -451,7 +470,6 @@
 
     <div class="event-toolbar">
       <button class="toolbar-btn edit" onclick="openModal()">✏️ 编辑</button>
-      <button class="toolbar-btn delete">🗑 删除</button>
     </div>
 
     <div class="event-body">
@@ -498,13 +516,13 @@
 </div>
 
 <div class="annotations">
-  <h4>归档入口的位置调整</h4>
+  <h4>Event 处置动作的收纳逻辑</h4>
   <ul>
-    <li><b>入口收进编辑 modal</b>：Event 外部不再露出归档按钮——想归档必须先点「编辑」进入 modal</li>
-    <li><b>Modal 内位置</b>：左下角，灰色小字文字链接，和右下角「保存/取消」形成对角线</li>
-    <li><b>为什么更合理</b>：归档本质是"编辑的一种"（这件事定版了），入口和编辑同路径、但藏得更深，符合"维护人才能做、不高频"</li>
-    <li><b>归档后回到 modal</b>：所有字段灰掉锁定，顶部一条黄色提示条；原归档链接变「取消归档」（蓝色）</li>
-    <li><b>Event 外部唯一变化</b>：时间戳前加 <code>· 已归档</code>，评论输入框替换为提示</li>
+    <li><b>外部只留「✏️ 编辑」一个按钮</b>：Event 条上不再露出归档、删除——高频+可逆操作上浮，低频+破坏性操作全部进 modal</li>
+    <li><b>Modal 左下角并排两个灰字链接</b>：<code>归档此事件 · 删除</code>，与右下角「保存」形成对角线</li>
+    <li><b>归档即冻结</b>：归档态下 modal 字段全部锁定，左下角只剩「取消归档」——删除入口消失，要删必须先解冻</li>
+    <li><b>冷静期的真正来源</b>：打开 modal = 重新看一眼完整内容；解冻→删除 = 第二次让用户确认——两道坎叠加，误删率接近零</li>
+    <li><b>一句话教给任何用户</b>："要处置这条 Event？打开编辑看左下角。"</li>
   </ul>
 </div>
 
@@ -553,7 +571,11 @@
     </div>
 
     <div class="modal-footer">
-      <button class="archive-link-modal" id="archiveLink" onclick="askArchive()">归档此事件</button>
+      <div class="modal-actions-left">
+        <button class="archive-link-modal" id="archiveLink" onclick="askArchive()">归档此事件</button>
+        <span class="modal-action-sep">·</span>
+        <button class="delete-link-modal" id="deleteLink" onclick="askDelete()">删除</button>
+      </div>
       <div class="footer-right">
         <button class="btn btn-ghost" onclick="closeModal()">取消</button>
         <button class="btn btn-primary" id="saveBtn">保存</button>
@@ -571,7 +593,7 @@
     </div>
     <div class="confirm-actions">
       <button class="btn btn-ghost" onclick="closeConfirm()">取消</button>
-      <button class="btn btn-danger" id="confirmBtn" onclick="doArchive()">归档</button>
+      <button class="btn btn-danger" id="confirmBtn">归档</button>
     </div>
   </div>
 </div>
@@ -580,11 +602,14 @@
 
 <script>
   let archived = false;
+  let pendingAction = null;   // 'archive' | 'unarchive' | 'delete'
+
   const ev = document.getElementById('event-3');
   const modal = document.getElementById('modal');
   const overlay = document.getElementById('overlay');
   const archiveLink = document.getElementById('archiveLink');
   const saveBtn = document.getElementById('saveBtn');
+  const confirmBtn = document.getElementById('confirmBtn');
 
   function openModal() {
     overlay.classList.add('show');
@@ -594,24 +619,50 @@
   }
   function closeModal() { overlay.classList.remove('show'); }
 
+  /* 归档 / 取消归档 */
   function askArchive() {
     const title = document.getElementById('confirmTitle');
     const body = document.getElementById('confirmBody');
-    const btn = document.getElementById('confirmBtn');
     if (!archived) {
+      pendingAction = 'archive';
       title.textContent = '归档此事件？';
       body.textContent = '归档后此 Event 不可再编辑、不可新增评论，但所有内容仍可正常查看。';
-      btn.textContent = '归档';
-      btn.className = 'btn btn-danger';
+      confirmBtn.textContent = '归档';
+      confirmBtn.className = 'btn btn-danger';
     } else {
+      pendingAction = 'unarchive';
       title.textContent = '取消归档？';
       body.textContent = '此 Event 将恢复为可编辑、可评论的正常状态。';
-      btn.textContent = '取消归档';
-      btn.className = 'btn btn-primary';
+      confirmBtn.textContent = '取消归档';
+      confirmBtn.className = 'btn btn-primary';
     }
     document.getElementById('confirmOverlay').classList.add('show');
   }
-  function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('show'); }
+
+  /* 删除 */
+  function askDelete() {
+    pendingAction = 'delete';
+    document.getElementById('confirmTitle').textContent = '删除此事件？';
+    document.getElementById('confirmBody').innerHTML =
+      '此事件及其下<b>所有评论、附件</b>将被永久移除，不可恢复。';
+    confirmBtn.textContent = '确认删除';
+    confirmBtn.className = 'btn btn-danger';
+    document.getElementById('confirmOverlay').classList.add('show');
+  }
+
+  function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+    pendingAction = null;
+  }
+
+  /* 确认按钮统一分发 */
+  confirmBtn.addEventListener('click', () => {
+    if (pendingAction === 'archive' || pendingAction === 'unarchive') {
+      doArchive();
+    } else if (pendingAction === 'delete') {
+      doDelete();
+    }
+  });
 
   function doArchive() {
     archived = !archived;
@@ -626,6 +677,18 @@
     }
     updateModalArchiveState();
     closeConfirm();
+  }
+
+  function doDelete() {
+    ev.style.transition = 'all .3s';
+    ev.style.opacity = '0';
+    ev.style.transform = 'translateX(-12px)';
+    setTimeout(() => {
+      ev.style.display = 'none';
+    }, 300);
+    closeModal();
+    closeConfirm();
+    showToast('已删除');
   }
 
   function updateModalArchiveState() {
